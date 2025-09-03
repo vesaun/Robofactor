@@ -1,0 +1,53 @@
+[project]
+name = "robofactor"
+version = "0.1.0"
+description = "Automated repo cleaning: linting, refactoring, dead code removal, and PRs."
+authors = [
+    { name = "Nathan So", email = "nathanso@example.com" }
+]
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "ruff",              # Fast Python linter/formatter
+    "black",             # Code formatter
+    "flake8",            # Linting (style checks)
+    "isort",             # Import sorting
+    "libcst",            # Refactoring / AST parsing
+    "openai",            # LLM integration
+    "pygithub",          # GitHub API for PRs
+    "gitpython",         # Git interaction
+    "click",             # CLI
+    "rich",              # Pretty logging/output
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "mypy",
+]
+
+[tool.uv]
+# uv-specific configuration
+index-url = "https://pypi.org/simple"
+prerelease = "allow"
+
+[tool.black]
+line-length = 88
+target-version = ["py310", "py311"]
+
+[tool.ruff]
+line-length = 88
+extend-select = ["I"]  # Import sorting
+
+[tool.isort]
+profile = "black"
+
+[tool.pytest.ini_options]
+addopts = "-q --tb=short --disable-warnings"
+testpaths = ["tests"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
