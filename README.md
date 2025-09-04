@@ -7,3 +7,5 @@ macOS/Linux:
 source .venv/bin/activate
 
 uv pip install -e '.[dev]'
+
+To run: uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000

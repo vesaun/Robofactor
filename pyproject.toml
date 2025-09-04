@@ -19,6 +19,9 @@ dependencies = [
     "gitpython",         # Git interaction
     "click",             # CLI
     "rich",              # Pretty logging/output
+    "fastapi",
+    "uvicorn",
+    "dotenv",
 ]
 
 [project.optional-dependencies]
