@@ -6,18 +6,16 @@ import black
 import isort
 
 
-def lint_and_return(file_path: Path) -> str:
+def lint_and_return(content: str) -> str:
     """
-    Lint a Python file and return the linted content as a string.
+    Lint Python code and return the linted content as a string.
     
     Args:
-        file_path: Path to the Python file to lint
+        content: Python code content to lint
         
     Returns:
-        The linted file content as a string
+        The linted code content as a string
     """
-    # Read the original file
-    content = file_path.read_text(encoding='utf-8')
     
     # Create a temporary file for ruff processing
     with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as temp_file:
@@ -33,7 +31,7 @@ def lint_and_return(file_path: Path) -> str:
         content = temp_path.read_text(encoding='utf-8')
         
         # Apply isort formatting
-        content = isort.code(content, file_path=file_path)
+        content = isort.code(content)
         
         # Apply black formatting
         content = black.format_str(content, mode=black.FileMode())
