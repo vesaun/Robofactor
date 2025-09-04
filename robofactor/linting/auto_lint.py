@@ -145,6 +145,7 @@ def print_summary(all_results: Dict[Path, Dict[str, LintResult]]):
     print(f"  Files processed: {total_files}")
     print(f"  Files with issues: {files_with_issues}")
     print(f"  Total issues: {total_issues}")
+    print("trivial")
     
     if files_with_issues == 0:
         print("  ✓ All files passed linting!")
