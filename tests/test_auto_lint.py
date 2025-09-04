@@ -1,207 +1,117 @@
 import pytest
 from pathlib import Path
-from robofactor.linting.auto_lint import lint_file, lint_directory, LintResult
+from robofactor.linting.auto_lint import lint_and_return
 
 
-def test_lint_file_returns_results(tmp_path):
-    """Test that lint_file returns dict of results."""
-    good_file = tmp_path / "good.py"
-    good_file.write_text("def add(a: int, b: int) -> int:\n    return a + b\n")
-    
-    results = lint_file(good_file, linters=['ruff'])
-    assert isinstance(results, dict)
-    assert 'ruff' in results
-    assert isinstance(results['ruff'], LintResult)
-
-
-def test_lint_file_with_specific_linters(tmp_path):
-    """Test linting with specific linters."""
+def test_lint_and_return_basic(tmp_path):
+    """Test that lint_and_return processes a file and returns string content."""
     test_file = tmp_path / "test.py"
-    test_file.write_text("def test():\n    pass\n")
+    test_file.write_text("def add(a: int, b: int) -> int:\n    return a + b\n")
     
-    results = lint_file(test_file, linters=['ruff', 'black'])
-    assert 'ruff' in results
-    assert 'black' in results
-    assert len(results) == 2
+    result = lint_and_return(test_file)
+    assert isinstance(result, str)
+    assert "def add(a: int, b: int) -> int:" in result
+    assert "return a + b" in result
 
 
-def test_lint_file_auto_fix(tmp_path):
-    """Test auto-fix functionality."""
+def test_lint_and_return_fixes_formatting(tmp_path):
+    """Test that lint_and_return fixes formatting issues."""
     test_file = tmp_path / "test.py"
-    test_file.write_text("def test( ):\n    x=1\n    return x\n")
+    # Write poorly formatted code
+    test_file.write_text("def test( ):\n    x=1+2\n    return x\n")
     
-    results = lint_file(test_file, linters=['ruff'], auto_fix=True)
-    assert 'ruff' in results
+    result = lint_and_return(test_file)
+    assert isinstance(result, str)
+    # Should be formatted by black
+    assert "def test():" in result
+    assert "x = 1 + 2" in result
 
 
-def test_lint_file_nonexistent():
-    """Test linting nonexistent file raises error."""
+def test_lint_and_return_handles_imports(tmp_path):
+    """Test that lint_and_return handles import sorting and removes unused imports."""
+    test_file = tmp_path / "test.py"
+    # Write with unsorted imports that are actually used
+    test_file.write_text("import sys\nimport os\nfrom pathlib import Path\n\ndef main():\n    print(sys.version)\n    print(os.getcwd())\n    p = Path('.')\n    return p\n")
+    
+    result = lint_and_return(test_file)
+    assert isinstance(result, str)
+    # Should contain used imports (sorted by isort)
+    assert "import" in result
+    assert "def main():" in result
+    assert "sys.version" in result
+
+
+def test_lint_and_return_preserves_original_file(tmp_path):
+    """Test that the original file is not modified."""
+    test_file = tmp_path / "test.py"
+    original_content = "def test( ):\n    x=1\n    return x\n"
+    test_file.write_text(original_content)
+    
+    result = lint_and_return(test_file)
+    
+    # Original file should be unchanged
+    assert test_file.read_text() == original_content
+    # But result should be formatted
+    assert result != original_content
+    assert isinstance(result, str)
+
+
+def test_lint_and_return_nonexistent_file():
+    """Test that lint_and_return raises FileNotFoundError for nonexistent files."""
     with pytest.raises(FileNotFoundError):
-        lint_file(Path("nonexistent.py"))
+        lint_and_return(Path("nonexistent.py"))
 
 
-def test_lint_file_non_python(tmp_path):
-    """Test linting non-Python file raises error."""
-    txt_file = tmp_path / "test.txt"
-    txt_file.write_text("Hello world")
-    
-    with pytest.raises(ValueError, match="Not a Python file"):
-        lint_file(txt_file)
-
-
-def test_lint_directory_returns_results(tmp_path):
-    """Test that lint_directory returns nested dict of results."""
-    good_file = tmp_path / "good.py"
-    good_file.write_text("def add(a: int, b: int) -> int:\n    return a + b\n")
-    
-    bad_file = tmp_path / "bad.py"
-    bad_file.write_text("def bad( ):\n    x=1\n    return x\n")
-    
-    results = lint_directory(tmp_path, linters=['ruff'])
-    assert isinstance(results, dict)
-    assert len(results) == 2
-    
-    # Each file should have results
-    for file_results in results.values():
-        assert isinstance(file_results, dict)
-        assert 'ruff' in file_results
-        assert isinstance(file_results['ruff'], LintResult)
-
-
-def test_lint_directory_empty(tmp_path):
-    """Test linting empty directory."""
-    results = lint_directory(tmp_path)
-    assert results == {}
-
-
-def test_lint_directory_no_python_files(tmp_path):
-    """Test directory with no Python files."""
-    (tmp_path / "readme.txt").write_text("Hello")
-    (tmp_path / "config.json").write_text("{}")
-    
-    results = lint_directory(tmp_path)
-    assert results == {}
-
-
-def test_lint_directory_recursive(tmp_path):
-    """Test recursive directory linting."""
-    subdir = tmp_path / "subdir"
-    subdir.mkdir()
-    
-    (tmp_path / "file1.py").write_text("def func1(): pass\n")
-    (subdir / "file2.py").write_text("def func2(): pass\n")
-    
-    # Recursive (default)
-    results = lint_directory(tmp_path, recursive=True)
-    assert len(results) == 2
-    
-    # Non-recursive
-    results = lint_directory(tmp_path, recursive=False)
-    assert len(results) == 1
-
-
-def test_lint_directory_skips_hidden_files(tmp_path):
-    """Test that hidden files are skipped."""
-    (tmp_path / "normal.py").write_text("def func(): pass\n")
-    (tmp_path / ".hidden.py").write_text("def func(): pass\n")
-    
-    results = lint_directory(tmp_path)
-    assert len(results) == 1
-    assert any("normal.py" in str(path) for path in results.keys())
-
-
-def test_lint_directory_nonexistent():
-    """Test linting nonexistent directory raises error."""
-    with pytest.raises(ValueError, match="Directory does not exist"):
-        lint_directory(Path("nonexistent"))
-
-
-def test_unknown_linter_warning(tmp_path, capsys):
-    """Test warning for unknown linter."""
+def test_lint_and_return_handles_unicode(tmp_path):
+    """Test that lint_and_return handles unicode characters correctly."""
     test_file = tmp_path / "test.py"
-    test_file.write_text("def test(): pass\n")
+    test_file.write_text("def greet():\n    return '¡Hola, mundo! 🌍'\n", encoding='utf-8')
     
-    results = lint_file(test_file, linters=['unknown_linter'])
-    captured = capsys.readouterr()
-    assert "Warning: Unknown linter 'unknown_linter', skipping" in captured.out
-    assert results == {}
+    result = lint_and_return(test_file)
+    assert isinstance(result, str)
+    assert "¡Hola, mundo! 🌍" in result
 
 
-@pytest.fixture
-def mock_subprocess_success(mocker):
-    """Mock successful subprocess calls."""
-    return mocker.patch(
-        "robofactor.linting.auto_lint.subprocess.run",
-        return_value=mocker.Mock(returncode=0, stdout="All good", stderr="")
-    )
+def test_lint_and_return_empty_file(tmp_path):
+    """Test that lint_and_return handles empty files."""
+    test_file = tmp_path / "empty.py"
+    test_file.write_text("")
+    
+    result = lint_and_return(test_file)
+    assert isinstance(result, str)
+    # Empty file should remain empty or have minimal formatting
+    assert len(result.strip()) == 0
 
 
-@pytest.fixture
-def mock_subprocess_failure(mocker):
-    """Mock failing subprocess calls."""
-    return mocker.patch(
-        "robofactor.linting.auto_lint.subprocess.run", 
-        return_value=mocker.Mock(returncode=1, stdout="Found issues", stderr="")
-    )
+def test_lint_and_return_complex_code(tmp_path):
+    """Test lint_and_return with more complex code structure."""
+    test_file = tmp_path / "complex.py"
+    complex_code = '''
+import sys
+import os
+from typing import List
 
+class TestClass:
+    def __init__(self,name:str):
+        self.name=name
+        
+    def method(self,items:List[str])->str:
+        result=""
+        for item in items:
+            result+=item+","
+        return result[:-1]
 
-def test_lint_result_success(tmp_path, mock_subprocess_success):
-    """Test LintResult when linting succeeds."""
-    test_file = tmp_path / "test.py"
-    test_file.write_text("def test(): pass\n")
+def function(a,b,c=None):
+    if c is None:
+        c=[]
+    return a+b+len(c)
+'''
+    test_file.write_text(complex_code)
     
-    results = lint_file(test_file, linters=['ruff'])
-    result = results['ruff']
-    
-    assert result.success is True
-    assert result.file_path == test_file
-    assert result.output == "All good"
-
-
-def test_lint_result_failure(tmp_path, mock_subprocess_failure):
-    """Test LintResult when linting fails."""
-    test_file = tmp_path / "test.py"
-    test_file.write_text("def test(): pass\n")
-    
-    results = lint_file(test_file, linters=['ruff'])
-    result = results['ruff']
-    
-    assert result.success is False
-    assert result.file_path == test_file
-    assert result.output == "Found issues"
-
-
-def test_command_timeout(tmp_path, mocker):
-    """Test handling of command timeout."""
-    from subprocess import TimeoutExpired
-    
-    mocker.patch(
-        "robofactor.linting.auto_lint.subprocess.run",
-        side_effect=TimeoutExpired(cmd=["ruff"], timeout=30)
-    )
-    
-    test_file = tmp_path / "test.py"
-    test_file.write_text("def test(): pass\n")
-    
-    results = lint_file(test_file, linters=['ruff'])
-    result = results['ruff']
-    
-    assert result.success is False
-    assert result.errors == "Command timed out"
-
-
-def test_command_not_found(tmp_path, mocker):
-    """Test handling of command not found."""
-    mocker.patch(
-        "robofactor.linting.auto_lint.subprocess.run",
-        side_effect=FileNotFoundError()
-    )
-    
-    test_file = tmp_path / "test.py"
-    test_file.write_text("def test(): pass\n")
-    
-    results = lint_file(test_file, linters=['ruff'])
-    result = results['ruff']
-    
-    assert result.success is False
-    assert "Command not found: ruff" in result.errors
+    result = lint_and_return(test_file)
+    assert isinstance(result, str)
+    assert "class TestClass:" in result
+    assert "def method(" in result
+    assert "def function(" in result
+    # Should be properly formatted
+    assert "def __init__(self, name: str):" in result
